@@ -33,13 +33,14 @@ function VirtualList(config) {
   var width = (config && config.w + 'px') || '100%';
   var height = (config && config.h + 'px') || '100%';
   var itemHeight = this.itemHeight = config.itemHeight;
+  var containerHeight = config.containerHeight;
 
   this.items = config.items;
   this.generatorFn = config.generatorFn;
   this.totalRows = config.totalRows || (config.items && config.items.length);
 
   var scroller = VirtualList.createScroller(itemHeight * this.totalRows);
-  this.container = VirtualList.createContainer(width, height);
+  this.container = VirtualList.createContainer(width, containerHeight);
   this.container.appendChild(scroller);
 
   var screenItemsLen = Math.ceil(config.h / itemHeight);
@@ -58,7 +59,7 @@ function VirtualList(config) {
     if (Date.now() - lastScrolled > 100) {
       var badNodes = document.querySelectorAll('[data-rm="1"]');
       for (var i = 0, l = badNodes.length; i < l; i++) {
-        self.container.removeChild(badNodes[i]);
+      badNodes[i].parentNode.removeChild(badNodes[i]);
       }
     }
   }, 300);
@@ -78,7 +79,7 @@ function VirtualList(config) {
   this.container.addEventListener('scroll', onScroll);
 }
 
-VirtualList.prototype.createRow = function(i) {
+VirtualList.prototype.createRow = function(i, top) {
   var item;
   if (this.generatorFn)
     item = this.generatorFn(i);
@@ -93,9 +94,13 @@ VirtualList.prototype.createRow = function(i) {
     }
   }
 
-  item.classList.add('vrow');
-  item.style.position = 'absolute';
-  item.style.top = (i * this.itemHeight) + 'px';
+  if (item) {
+    item.classList.add('vrow');
+    item.style.position = 'absolute';
+    if (top >= 0) {
+      item.style.top = top + 'px';
+    }
+  }
   return item;
 };
 
@@ -117,10 +122,18 @@ VirtualList.prototype._renderChunk = function(node, from) {
   // Append all the new rows in a document fragment that we will later append to
   // the parent node
   var fragment = document.createDocumentFragment();
+  var t = from;
   for (var i = from; i < finalItem; i++) {
-    fragment.appendChild(this.createRow(i));
+    var row = this.createRow(i);
+    if (row) {
+      row.style.top = (t * this.itemHeight) + 'px';
+      t++;
+      fragment.appendChild(row);
+    }
+    else
+      if (finalItem < this.totalRows)
+        finalItem++;
   }
-
   // Hide and mark obsolete nodes for deletion.
   for (var j = 1, l = node.childNodes.length; j < l; j++) {
     node.childNodes[j].style.display = 'none';
@@ -129,14 +142,19 @@ VirtualList.prototype._renderChunk = function(node, from) {
   node.appendChild(fragment);
 };
 
+VirtualList.prototype.renderFilteredChunk = function (from) {
+  var node = this.container;
+  var from = 0;
+  this._renderChunk(node, from);
+};
+
 VirtualList.createContainer = function(w, h) {
-  var c = document.createElement('div');
+  var c = document.createElement('ul');
   c.style.width = w;
-  c.style.height = h;
+  c.style.height = h + 'px';
   c.style.overflow = 'auto';
   c.style.position = 'relative';
   c.style.padding = 0;
-  c.style.border = '1px solid black';
   return c;
 };
 
@@ -145,6 +163,7 @@ VirtualList.createScroller = function(h) {
   scroller.style.opacity = 0;
   scroller.style.position = 'absolute';
   scroller.style.top = 0;
+  scroller.classList.add('scroller');
   scroller.style.left = 0;
   scroller.style.width = '1px';
   scroller.style.height = h + 'px';
